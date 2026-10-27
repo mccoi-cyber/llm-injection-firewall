@@ -4,7 +4,7 @@ Evasion-resistant normalization layer.
 Regex signature matching is trivially defeated by:
   - base64-encoding the payload
   - inserting zero-width/invisible Unicode characters between letters
-    (e.g. "i​gnore​ all" still reads as "ignore all" to a human/LLM,
+    (e.g. "i\u200bgnore\u200b all" still reads as "ignore all" to a human/LLM,
     but defeats a naive \bignore\b regex)
   - swapping ASCII letters for Unicode homoglyphs (Cyrillic "а" instead of Latin "a")
   - full/half-width Unicode forms, combining diacritics, etc.
@@ -20,7 +20,7 @@ import re
 import unicodedata
 
 ZERO_WIDTH_CHARS = [
-    "​", "‌", "‍", "⁠", "﻿", "­",
+    "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff", "\u00ad",
 ]
 
 # A small, non-exhaustive homoglyph table covering the most common Cyrillic/Greek
@@ -28,9 +28,12 @@ ZERO_WIDTH_CHARS = [
 # (Unicode's own confusables.txt has thousands of entries) -- see README limitations.
 HOMOGLYPH_MAP = {
     "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x",
+    "і": "i", "ѕ": "s", "ј": "j", "ԁ": "d", "ԛ": "q", "һ": "h", "ԝ": "w",
     "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O",
-    "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X",
-    "ο": "o", "α": "a", "ρ": "p", "υ": "u", "Α": "A", "Β": "B", "Ε": "E",
+    "Р": "P", "С": "C", "Т": "T", "У": "Y", "Х": "X", "І": "I", "Ѕ": "S",
+    "ο": "o", "α": "a", "ρ": "p", "υ": "u", "ν": "v", "Α": "A", "Β": "B",
+    "Ε": "E", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Τ": "T",
+    "Υ": "Y", "Χ": "X", "Ζ": "Z",
 }
 
 BASE64_CANDIDATE_RE = re.compile(rb"[A-Za-z0-9+/]{20,}={0,2}")
@@ -79,8 +82,6 @@ def _decode_recursive(data: bytes, depth: int, found: list[str]) -> None:
             decoded_text = decoded.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        # Heuristic: require mostly printable characters to avoid flagging decoded
-        # binary noise as a "payload".
         printable_ratio = sum(1 for c in decoded_text if c.isprintable()) / max(1, len(decoded_text))
         if printable_ratio > 0.85 and len(decoded_text.strip()) >= 4:
             found.append(decoded_text)
